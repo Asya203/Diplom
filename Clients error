@@ -1,0 +1,89 @@
+select * from (select main_code.*,  
+                case when LENGTH(REPLACE(SURNAME,' ','')) <= 1 then 'Ошибка: "В поле "Фамилия" клиента указано менее двух символов"' ||chr(10) end||--фамилия меньше 2 сим
+                case when LENGTH(REPLACE(NNAME,' ','')) <= 1 then 'Ошибка: "В поле "Имя" клиента указано менее двух символов"' ||chr(10) end||--имя меньше 2 сим
+                case when PATRONYMIC is null then 'Ошибка: "Отчество отсутствует в отдельном поле "Отчество"' ||chr(10) end||
+                case when case when regexp_replace(SURNAME,    '[a-zA-Z]', '1', 1, 0, 'c') like '1%' then 'Ошибка1' --er1 --фамилия меньше 2 сим
+                               when regexp_replace(NNAME,      '[a-zA-Z]', '2', 1, 0, 'c') like '2%' then 'Ошибка2' --er2 --имя меньше 2 сим
+                               when regexp_replace(PATRONYMIC, '[a-zA-Z]', '3', 1, 0, 'c') like '3%' then 'Ошибка3' --er3   
+                          end is not null then 'Ошибка: "ФИО заведено на иностранном языке"' ||chr(10) end||
+                case when RESIDENT = 'Резидент' and coalesce (DIVISION_CODE, '1') = '1' then 'Ошибка: "Код подразделения содержит пустое поле" (для резидента)' ||chr(10) end|| 
+                case when INSTR(PASSPORT_SER, ' ', 1) = 0 then 'Ошибка: "В паспортных данных в поле "Серия" нет пробела"' ||chr(10) end||                         
+                            case when case when LENGTH(base_phone) >= 20 then 'Ошибка1' --er1 
+                                           when LENGTH(off_phone)  >= 20 then 'Ошибка2' --er2 
+                                           when LENGTH(mob_phone)  >= 20 then 'Ошибка3' --er3   
+                                           when LENGTH(base_phone) <= 10 then 'Ошибка1' --er1 
+                                           when LENGTH(off_phone)  <= 10 then 'Ошибка2' --er2 
+                                           when LENGTH(mob_phone)  <= 10 then 'Ошибка3' --er3 
+                                      end is not null then 'Ошибка: "В поле "Телефоны" в графе "Полное представление" больше двадцати или меньше десяти символов"' ||chr(10) end||
+                case when (select case when date_pasport - date_blank >= 5 then date_pasport - date_blank  
+                                       when date_blank - date_pasport >= 5 then date_blank - date_pasport end rr
+                             from (select TO_CHAR(PASSPORT_DATE,'yyYY') date_pasport,
+                                         case when TO_CHAR(sysdate,'YY') <  substr(to_number(regexp_replace(PASSPORT_SER, '[^0-9]', '')),-2) then '19' || substr(to_number(regexp_replace(PASSPORT_SER, '[^0-9]', '')),-2) 
+                                              when TO_CHAR(sysdate,'YY') >= substr(to_number(regexp_replace(PASSPORT_SER, '[^0-9]', '')),-2) then '20' || substr(to_number(regexp_replace(PASSPORT_SER, '[^0-9]', '')),-2) end date_blank  
+                                     from clients cdoc
+                                    where cdoc.ID = main_code.ID
+                                      and PASSPORT_DATE = (select max(PASSPORT_DATE) from clients c where c.ID = cdoc.ID)
+                                      and rownum=1)) is not null 
+                     then 'Ошибка: "Дата выдачи паспорта отклоняется больше, чем на 5 лет от даты выпуска бланка"' ||chr(10) end||
+--                            case when case when base_phone not like '+7 (___) _______' then 'Ошибка1'
+----                                                   when off_phone not like '+7 (___) _______' then 'Ошибка2'
+--                                           when mob_phone not like '+7 (___) _______' then 'Ошибка3'  
+--                                      end is not null
+--                                 then 'Ошибка: "Телефон должен быть указан в формате +7 (***) *******"' ||chr(10) end||
+                /*case when all_phone =1
+                     then 'Ошибка: "В поле "Телефоны" номер полностью указан в графе "номер"' ||chr(10) end||*/
+                  case when RESIDENT = 'Резидент' and 
+                                    case when GENDER = 'F' 
+                                              and (upper(PATRONYMIC) not like '%ОВНА' 
+                                              and upper(PATRONYMIC) not like '%ЕВНА' 
+                                              and upper(PATRONYMIC) not like '%ИЧНА'
+                                              and upper(PATRONYMIC) not like '%ИНИЧНА')
+                                         then 'Ошибка_Ж' 
+                                                                                                                                                               
+                                          when GENDER = 'M' 
+                                                and (upper(PATRONYMIC) not like '%ОВИЧ' 
+                                                and upper(PATRONYMIC) not like '%ЕВИЧ' 
+                                                and upper(PATRONYMIC) not like '%ИЧ' ) 
+                                           then 'Ошибка_М'   
+                                          when GENDER is null
+                                                and (upper(PATRONYMIC) not like '%ОВНА' 
+                                                and upper(PATRONYMIC) not like '%ЕВНА' 
+                                                and upper(PATRONYMIC) not like '%ИЧНА'
+                                                and upper(PATRONYMIC) not like '%ИНИЧНА'
+                                                and upper(PATRONYMIC) not like '%ОВИЧ' 
+                                                and upper(PATRONYMIC) not like '%ЕВИЧ' 
+                                                and upper(PATRONYMIC) not like '%ИЧ')
+                                           then 'Ошибка_все'
+                                                                               
+                                    end is not null                                                                                     
+                                then 'Ошибка: "Поле "Отчество" имеет нестандартное окончание"'  
+                ||chr(10) end
+
+                 error_base
+from (select distinct c.ID,
+
+       SURNAME, --фамилия
+                                
+       NAME NNAME, --имя
+         
+       PATRONYMIC, --отчество 
+       
+       DECODE (GENDER, 'M','М', 'F','Ж') GENDER, --увидеть пол человека 
+
+       BIRTH_DATE,    --др
+       
+       case when PHONE_TYPE = 1 then phone end base_phone,
+       
+       case when PHONE_TYPE = 2 then phone end off_phone, 
+       
+       case when PHONE_TYPE = 3 then phone end mob_phone, --телефон=
+
+    --   phone all_phone,
+       
+       PASSPORT_SER, --серия        
+       PASSPORT_NUM, --номер
+       DIVISION_CODE, --код подразделения
+       case when RESIDENT = 1 then 'Резидент' else case when RESIDENT = 2 then 'Нерезидент' end end RESIDENT --Резидентство
+       
+  from clients c) main_code 
+      ) where error_base is not null
