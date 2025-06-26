@@ -1,0 +1,20 @@
+create or replace PACKAGE GonchAI AS 
+------------------------------------------------------------------------------- 
+     
+  -- коллекция объектов                               
+  TYPE split_tbl IS TABLE OF varchar2(32767); 
+       
+  -- конвейерная функция     
+  FUNCTION divide --split   
+                 ( p_list in varchar2,  
+                   p_del  in varchar2 default ',' ) 
+          RETURN split_tbl pipelined; 
+ 
+  --нахождение неправильных номеров из таблицы clients2 
+  FUNCTION wrongPhone  
+                         ( clinum in number, 
+                           cphone in varchar2 )  
+          RETURN varchar2; 
+   
+END GonchAI;
+/
