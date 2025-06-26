@@ -1,0 +1,136 @@
+create or replace PACKAGE BODY GonchAI AS 
+ 
+FUNCTION divide ( p_list varchar2, p_del varchar2 default ',' ) RETURN split_tbl pipelined   
+IS  
+    l_idx pls_integer; --separator 
+    l_list varchar2(32767) := p_list; 
+    l_value varchar2(32767); 
+BEGIN 
+  LOOP 
+    l_idx := instr(l_list,p_del); 
+    IF l_idx <> 0 THEN 
+      pipe row(substr(l_list,1,l_idx-1)); 
+      l_list := substr(l_list,l_idx+length(p_del)); 
+    ELSE 
+      pipe row(l_list); 
+      EXIT; 
+    END IF; 
+  END LOOP; 
+  RETURN; 
+END divide; 
+ 
+FUNCTION wrongPhone (clinum in number, cphone in varchar2) RETURN VARCHAR2 
+IS 
+  phone_more     varchar2(2000); 
+  Reser          varchar2(500); 
+  Result         varchar2(1000) := NULL; 
+   
+  phone_number   varchar2(2000);     
+     
+  TYPE fullPhone IS TABLE OF varchar2(2000); 
+     
+  tfullPhone     fullPhone; 
+  v_Phone        varchar2(2000); 
+   
+  phone_else     varchar2(2000);   
+ 
+BEGIN 
+ 
+  SELECT listagg(cphone, ', ') WITHIN GROUP (ORDER BY id) phone_number 
+    INTO phone_number 
+    FROM clients2 
+   WHERE to_number(id) = clinum 
+     AND (   phone = cphone  
+          OR phone_sms = cphone) 
+   GROUP BY id; 
+    
+  IF not regexp_like(phone_number, '\,') THEN 
+    IF    (length(phone_number) NOT BETWEEN 10 AND 20) 
+       OR not regexp_like(phone_number,'[+]7[(][[:digit:]]{3}[)][[:digit:]]{7}')--'[+]7[(][[:digit:]]{3}[)]( |)[[:digit:]]{7}') --маска для телефона, если захотят ставить правильные номера с пробелом и без после скобки 
+    THEN  
+      Reser := 1;  
+    ELSE  
+      Reser := 0;  
+    END IF; 
+     
+    IF  substr(phone_number, 1, 2) <> '+7'  
+      THEN Reser := Reser || '2';  
+      ELSE Reser := Reser || '0'; 
+    END IF; 
+     
+    IF length(regexp_substr(phone_number, '[(].*[)]')) - 2 <> 3 
+      THEN Reser := Reser || '3';  
+      ELSE Reser := Reser || '0';--'cool' 
+    END IF; 
+     
+    IF regexp_replace(phone_number, '[[:space:]]') = phone_number  
+      THEN Reser := Reser || '0';--'good phone'; 
+      ELSE  Reser := Reser || '4';--'wrong'; 
+    END IF; 
+     
+    IF regexp_replace(regexp_replace(phone_number, '\d','',1,0), '[[:space:]]') in ('+()','+(','+)','()','+','') 
+      THEN Reser := Reser || '0';--'good phone'; 
+      ELSE Reser := Reser || '5';--'wrong'; 
+    END IF; 
+  ELSE  
+    phone_more := phone_number; 
+  END IF; 
+   
+  IF  CASE WHEN NOT regexp_like(phone_number, '[,]') THEN phone_number ELSE NULL END IS NULL THEN 
+    phone_else:= COALESCE(phone_more,phone_number); 
+    IF phone_else IS NOT NULL THEN   
+      SELECT f.COLUMN_VALUE  
+        BULK COLLECT INTO tfullPhone 
+        FROM TABLE (GONCHAI.divide(phone_else,', ')) f; 
+         
+      IF tfullPhone IS NOT NULL AND tfullPhone.COUNT > 0 THEN 
+        FOR i IN tfullPhone.FIRST .. tfullPhone.LAST LOOP 
+          v_Phone := tfullPhone(i); 
+           
+          IF not regexp_like(v_Phone, '\,') THEN 
+            IF    (length(v_Phone) NOT BETWEEN 10 AND 20) 
+               OR not regexp_like(v_Phone,'[+]7[(][[:digit:]]{3}[)][[:digit:]]{7}')--'[+]7[(][[:digit:]]{3}[)]( |)[[:digit:]]{7}') --маска для телефона, если захотят ставить правильные номера с пробелом и без после скобки 
+            THEN Reser := Reser || '1';  
+            ELSE Reser := Reser || '0'; 
+            END IF; 
+          END IF; 
+         
+          IF substr(v_Phone, 1, 2) <> '+7' 
+            THEN Reser := Reser || '2'; 
+            ELSE Reser := Reser || '0'; 
+          END IF;  
+           
+          IF length(regexp_substr(v_Phone, '[(].*[)]')) - 2 <> 3 
+            THEN Reser := Reser || '3';  
+            ELSE Reser := Reser || '0';--'cool' 
+          END IF; 
+           
+          IF regexp_replace(v_Phone, '[[:space:]]') = v_Phone  
+            THEN Reser := Reser || '0';--'good phone'; 
+            ELSE  Reser := Reser || '4';--'wrong'; 
+          END IF; 
+           
+          IF regexp_replace(regexp_replace(v_Phone, '\d','',1,0), ' ') in ('+()','+(','+)','()','+','') 
+            THEN Reser := Reser || '0';--'good phone'; 
+            ELSE  Reser := Reser || '5';--'wrong'; 
+          END IF; 
+          Reser := Reser || ','; 
+        END LOOP; 
+      END IF; 
+    END IF; 
+  END IF;   
+   
+  Result :=  Reser; 
+--  Reser = 1 - неверная маска или количество символов 
+--  Reser = 2 - в начале не +7 
+--  Reser = 3 - в скобках не 3 символа 
+--  Reser = 4 - есть пробел 
+--  Reser = 5 - если при  написании номера телефона указан недопустимый символ (отличный от шаблона) 
+   
+  RETURN Result; 
+EXCEPTION WHEN OTHERS THEN 
+  RETURN NULL; 
+END wrongPhone; 
+ 
+END GonchAI;
+/
