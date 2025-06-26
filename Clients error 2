@@ -1,0 +1,13 @@
+select cc.*,
+    case when GonchAI.wrongPhone(id,phone) like '%1%' then 'Ошибка: неверная маска или количество символов' end || chr(10)||
+    case when GonchAI.wrongPhone(id,phone) like '%2%' then 'Ошибка: в начале не +7' end || chr(10)||
+    case when GonchAI.wrongPhone(id,phone) like '%3%' then 'Ошибка: в скобках не 3 символа' end || chr(10)||
+    case when GonchAI.wrongPhone(id,phone) like '%4%' then 'Ошибка: есть пробел' end || chr(10)||
+    case when GonchAI.wrongPhone(id,phone) like '%5%' then 'Ошибка: если при  написании номера телефона указан недопустимый символ (отличный от шаблона)' end || chr(10)||
+    case when GonchAI.wrongPhone(id,phone_sms) like '%1%' then 'Ошибка: неверная маска или количество символов при написании номера телефона в смс' end || chr(10)||
+    case when GonchAI.wrongPhone(id,phone_sms) like '%2%' then 'Ошибка: в начале не +7 при написании номера телефона в смс' end || chr(10)||
+    case when GonchAI.wrongPhone(id,phone_sms) like '%3%' then 'Ошибка: в скобках не 3 символа при написании номера телефона в смс' end || chr(10)||
+    case when GonchAI.wrongPhone(id,phone_sms) like '%4%' then 'Ошибка: есть пробел при написании номера телефона в смс' end || chr(10)||
+    case when GonchAI.wrongPhone(id,phone_sms) like '%5%' then 'Ошибка: если при написании номера телефона в смс указан недопустимый символ (отличный от шаблона)' end 
+     err
+  from clients2 cc
